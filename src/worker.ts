@@ -62,7 +62,7 @@ const handleMainThreadMessage = (message: any) => {
 }
 
 const runScript = async (script: any, args: any[]) => {
-  const iface = {
+  const ctx = {
     console: _console,
     ...injectedInterface,
     isWorker: true,
@@ -71,8 +71,8 @@ const runScript = async (script: any, args: any[]) => {
     __dirname: dirname,
     exports: Object.create(null),
   }
-  script.runInNewInterface(iface, { displayErrors: true })
-  const mainfn = iface.exports.__mainfn
+  script.runInNewContext(ctx, { displayErrors: true })
+  const mainfn = ctx.exports.__mainfn
   if (typeof mainfn !== 'function') throw new Error('invalid function')
   return mainfn.apply(null, args)
 }
