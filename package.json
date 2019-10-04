@@ -1,0 +1,28 @@
+{
+  "name": "fun2",
+  "version": "0.0.0",
+  "description": "",
+  "main": "lib/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "rm -rf ./lib/* && tsc -p ./tsconfig.browser.json && tsc -p ./tsconfig.nodejs.json' './src",
+    "watch": "rm -rf ./lib/* && kckr -e 'tsc -p ./tsconfig.browser.json && tsc -p ./tsconfig.nodejs.json' './src'"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@types/deep-freeze": "^0.1.2",
+    "@types/koa-compose": "^3.2.4",
+    "@types/node": "^12.7.5",
+    "deep-freeze": "^0.0.1",
+    "p-defer": "^3.0.0",
+    "p-timeout": "^3.2.0"
+  },
+  "devDependencies": {
+    "jasmine": "^3.5.0",
+    "jasmine-ts": "^0.3.0",
+    "kckr": "^3.0.0",
+    "ts-node": "^8.4.1",
+    "typescript": "^3.6.3"
+  }
+}
