@@ -5,14 +5,13 @@
   "main": "lib/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "rm -rf ./lib/* && tsc -p ./tsconfig.browser.json && tsc -p ./tsconfig.nodejs.json' './src",
+    "build": "rm -rf ./lib/* && tsc -p ./tsconfig.browser.json && tsc -p ./tsconfig.nodejs.json",
     "watch": "rm -rf ./lib/* && kckr -e 'tsc -p ./tsconfig.browser.json && tsc -p ./tsconfig.nodejs.json' './src'"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@types/deep-freeze": "^0.1.2",
-    "@types/koa-compose": "^3.2.4",
     "@types/node": "^12.7.5",
     "deep-freeze": "^0.0.1",
     "p-defer": "^3.0.0",
