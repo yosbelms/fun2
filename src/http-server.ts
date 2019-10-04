@@ -51,8 +51,8 @@ export const createExpressMiddleware = (runner: Runner = createRunner()) => {
 }
 
 export const createKoaMiddleware = (runner: Runner = createRunner()) => {
-  return async (ctx: any, next: Function) => {
-    const { request, response } = ctx
+  return async (iface: any, next: Function) => {
+    const { request, response } = iface
     const result = await handleHttpRequest(
       runner,
       request.method,

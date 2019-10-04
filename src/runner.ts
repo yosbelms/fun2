@@ -2,12 +2,12 @@ import Pool from './pool'
 import pDefer from 'p-defer'
 import pTimeout from 'p-timeout'
 import { Worker } from 'worker_threads'
-import { createContext, serializeContext, callInContext } from './context'
+import { createInterface, serializeInterface, callInInterface } from './interface'
 
 const handleWorkerMessage = (
   pool: Pool<Worker>,
   worker: Worker,
-  context: any,
+  iface: any,
   resolve: Function,
   reject: Function,
 ) => (message: any) => {
@@ -15,7 +15,7 @@ const handleWorkerMessage = (
   switch (message.type) {
     case 'REQUEST':
       const { basePath, method, args, id } = message
-      const r = callInContext(context, basePath, method, args)
+      const r = callInInterface(iface, basePath, method, args)
       Promise.resolve(r).then((result) => {
         worker.postMessage({ type: 'RESPONSE', id, result })
       })
@@ -57,7 +57,7 @@ const handleWorkerExit = (
 }
 
 export interface RunnerConfig {
-  context: any
+  interface: any
   maxWorkers: number
   timeout: number
   filename: string
@@ -77,11 +77,11 @@ export class Runner {
       knownSources: {},
       allowUnknownSources: true,
       maxWorkers: 5,
-      context: createContext({}),
+      interface: createInterface({}),
       ...config,
     }
     const {
-      context,
+      interface: iface,
       maxWorkers,
       filename,
       allowedModules
@@ -92,7 +92,7 @@ export class Runner {
       create() {
         return new Worker(`${__dirname}/worker.js`, {
           workerData: {
-            serializedContext: serializeContext(context),
+            serializedInterface: serializeInterface(iface),
             filename,
             allowedModules,
           }
@@ -124,7 +124,7 @@ export class Runner {
     const { promise, resolve, reject } = pDefer()
     if (this.pool.contains(worker)) {
       worker.postMessage({ type: 'EXECUTE', source, args })
-      worker.on('message', handleWorkerMessage(this.pool, worker, this.config.context, resolve, reject))
+      worker.on('message', handleWorkerMessage(this.pool, worker, this.config.interface, resolve, reject))
       worker.on('error', handleWorkerError(this.pool, worker, reject))
       worker.on('exit', handleWorkerExit(this.pool, worker, reject))
       pTimeout(promise, _timeout).catch(handleWorkerError(this.pool, worker, reject))

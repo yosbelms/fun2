@@ -4,7 +4,7 @@ import path from 'path'
 import { parentPort, workerData, MessagePort } from 'worker_threads'
 import { Script } from 'vm'
 import { createConsole } from './util'
-import { createContextClient } from './context'
+import { createInterfaceClient } from './interface'
 
 let requestIdSeed = 0
 const pendingRequestsDeferredPromises = new Map()
@@ -14,7 +14,7 @@ const sendMessage = (msg: any) => (parentPort as MessagePort).postMessage(msg)
 const filename = typeof workerData.filename === 'string' ? workerData.filename : ''
 const dirname = path.dirname(filename)
 
-const createContextClientFunctionCaller = (method: string, basePath: string) => {
+const createInterfaceClientFunctionCaller = (method: string, basePath: string) => {
   return (...args: any[]) => {
     const id = requestIdSeed++
     const deferredPromise = pDefer()
@@ -24,10 +24,10 @@ const createContextClientFunctionCaller = (method: string, basePath: string) => 
   }
 }
 
-const injectedContext = deepFreeze(
-  createContextClient(
-    workerData.serializedContext,
-    createContextClientFunctionCaller,
+const injectedInterface = deepFreeze(
+  createInterfaceClient(
+    workerData.serializedInterface,
+    createInterfaceClientFunctionCaller,
   )
 )
 
@@ -62,17 +62,17 @@ const handleMainThreadMessage = (message: any) => {
 }
 
 const runScript = async (script: any, args: any[]) => {
-  const ctx = {
+  const iface = {
     console: _console,
-    ...injectedContext,
+    ...injectedInterface,
     isWorker: true,
     require: _require,
     __filename: filename,
     __dirname: dirname,
     exports: Object.create(null),
   }
-  script.runInNewContext(ctx, { displayErrors: true })
-  const mainfn = ctx.exports.__mainfn
+  script.runInNewInterface(iface, { displayErrors: true })
+  const mainfn = iface.exports.__mainfn
   if (typeof mainfn !== 'function') throw new Error('invalid function')
   return mainfn.apply(null, args)
 }
