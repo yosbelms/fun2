@@ -2,11 +2,12 @@
   "name": "fun2",
   "version": "0.0.0",
   "description": "",
-  "main": "lib/index.js",
+  "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "rm -rf ./lib/* && tsc -p ./tsconfig.browser.json && tsc -p ./tsconfig.nodejs.json",
-    "watch": "rm -rf ./lib/* && kckr -e 'tsc -p ./tsconfig.browser.json && tsc -p ./tsconfig.nodejs.json' './src'"
+    "clean": "rm -f *.js *.js.map",
+    "build": "npm run clean && tsc -p ./tsconfig.browser.json && tsc -p ./tsconfig.nodejs.json",
+    "watch": "npx sane 'npm run build' --glob='*.ts'"
   },
   "author": "",
   "license": "ISC",
@@ -21,6 +22,7 @@
     "jasmine": "^3.5.0",
     "jasmine-ts": "^0.3.0",
     "kckr": "^3.0.0",
+    "sane": "^4.1.0",
     "ts-node": "^8.4.1",
     "typescript": "^3.6.3"
   }
