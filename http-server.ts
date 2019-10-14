@@ -5,12 +5,16 @@ interface SourceArgsContainer {
   args?: string
 }
 
-const parseJson = (args: any) => {
+const defaultDecode = (data: any) => {
   return (
-    typeof args === 'string'
-      ? JSON.parse(args)
+    typeof data === 'string'
+      ? JSON.parse(data)
       : void 0
   )
+}
+
+const defaultEncode = (data: any) => {
+  return JSON.stringify(data)
 }
 
 export const handleHttpRequest = async (
@@ -18,7 +22,8 @@ export const handleHttpRequest = async (
   method: string,
   query: SourceArgsContainer = {},
   body: SourceArgsContainer = {},
-  parseArgs: Function = parseJson
+  encode: Function = defaultEncode,
+  decode: Function = defaultDecode,
 ) => {
   let source = query.source
   let args
@@ -32,45 +37,64 @@ export const handleHttpRequest = async (
       break
   }
 
-  const parsedArgs = parseArgs(args)
-
-  return await (runner as Runner).run(
+  const decodedArgs = decode(args)
+  const result = await (runner as Runner).run(
     source || '',
-    parsedArgs
+    decodedArgs
   )
+
+  return encode(result)
 }
 
 export const createExpressMiddleware = (
   runner: Runner = createRunner(),
-  parseArgs?: Function
+  encode?: Function,
+  decode?: Function,
 ) => {
   return async (request: any, response: any, next: Function) => {
-    const result = await handleHttpRequest(
-      runner,
-      request.method,
-      request.query,
-      request.body,
-      parseArgs,
-    )
-    response.send(result)
-    next()
+    try {
+      const result = await handleHttpRequest(
+        runner,
+        request.method,
+        request.query,
+        request.body,
+        encode,
+        decode,
+      )
+      response.send(result)
+      next()
+    } catch (err) {
+      response.statusCode = 500
+      response.send(err.stack)
+      next()
+    }
   }
 }
 
 export const createKoaMiddleware = (
   runner: Runner = createRunner(),
-  parseArgs?: Function
+  encode?: Function,
+  decode?: Function,
 ) => {
   return async (ctx: any, next: Function) => {
     const { request, response } = ctx
-    const result = await handleHttpRequest(
-      runner,
-      request.method,
-      request.query,
-      request.body,
-      parseArgs
-    )
-    response.body = result
-    next()
+    try {
+      const result = await handleHttpRequest(
+        runner,
+        request.method,
+        request.query,
+        request.body,
+        encode,
+        decode,
+      )
+      response.body = result
+      next()
+    } catch (err) {
+      console.log('error http', err.stack)
+      ctx.throw(500, err.stack)
+      // response.status = 500
+      // response.body = err.stack
+      // next()
+    }
   }
 }

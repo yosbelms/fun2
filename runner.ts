@@ -1,7 +1,7 @@
 import Pool from './pool'
 import pDefer from 'p-defer'
-import pTimeout from 'p-timeout'
 import { Worker } from 'worker_threads'
+import { MessageType, ErrorType, secs, EvalError, ExitError, RuntimeError, TimeoutError, mins } from './util'
 import { createInterface, serializeInterface, callInInterface } from './interface'
 
 const handleWorkerMessage = (
@@ -11,54 +11,56 @@ const handleWorkerMessage = (
   resolve: Function,
   reject: Function,
 ) => (message: any) => {
-  // console.log(message)
+  // console.log('RUNNER', message)
   switch (message.type) {
-    case 'REQUEST':
+    case MessageType.REQUEST:
       const { basePath, method, args, id } = message
       const r = callInInterface(iface, basePath, method, args)
       Promise.resolve(r).then((result) => {
-        worker.postMessage({ type: 'RESPONSE', id, result })
+        worker.postMessage({ type: MessageType.RESPONSE, id, result })
       })
-      break;
-    case 'RETURN':
+      break
+    case MessageType.RETURN:
       const { result: res } = message
       resolve(res)
-      if (pool.contains(worker)) {
+      if (pool.isAcquired(worker)) {
         pool.release(worker)
       }
-      break;
-    case 'ERROR':
-      const { message: msg } = message
-      handleWorkerError(pool, worker, reject)(msg)
-      break;
-  }
-}
+      break
+    case MessageType.ERROR:
+      const { stack, errorType } = message
+      let err: Error = new Error
 
-const handleWorkerError = (
-  pool: Pool<Worker>,
-  worker: Worker,
-  reject: Function,
-) => (message: any) => {
-  reject(message)
-  if (pool.contains(worker)) {
-    pool.release(worker)
-  }
-}
+      switch (errorType) {
+        case ErrorType.EVAL:
+          err = new EvalError(stack)
+          break
+        case ErrorType.RUNTIME:
+          err = new RuntimeError(stack)
+          break
+        case ErrorType.TIMEOUT:
+          err = new TimeoutError(stack)
+          break
+      }
 
-const handleWorkerExit = (
-  pool: Pool<Worker>,
-  worker: Worker,
-  reject: Function,
-) => (code: number) => {
-  reject(`Worker has ended with code ${code}`)
-  if (pool.contains(worker)) {
-    pool.release(worker)
+      reject(err)
+      if (pool.isAcquired(worker)) {
+        pool.release(worker)
+      }
+      break
+    case MessageType.EXIT:
+      const { code } = message
+      reject(new ExitError(`Worker has ended with code ${code}`))
+      pool.remove(worker)
+      break
   }
 }
 
 export interface RunnerConfig {
   interface: any
   maxWorkers: number
+  maxWorkersIddleTime: number
+  maxWorkersLifeTime: number
   timeout: number
   filename: string
   allowedModules: string[]
@@ -70,25 +72,35 @@ export interface RunnerConfig {
 export class Runner {
   config: Partial<RunnerConfig>
   pool: Pool<Worker>
+  cachedScriptsWithEvalError: Map<string, any>
 
   constructor(config: Partial<RunnerConfig>) {
+    this.cachedScriptsWithEvalError = new Map()
     this.config = {
+      timeout: secs(15),
       allowedModules: [],
       knownSources: {},
       allowUnknownSources: true,
       maxWorkers: 5,
+      maxWorkersIddleTime: mins(1),
+      maxWorkersLifeTime: mins(5),
       interface: createInterface({}),
       ...config,
     }
+
     const {
       interface: iface,
       maxWorkers,
       filename,
-      allowedModules
+      allowedModules,
+      maxWorkersIddleTime,
+      maxWorkersLifeTime,
     } = this.config
 
     this.pool = new Pool({
       maxResorces: maxWorkers,
+      maxIddleTime: maxWorkersIddleTime,
+      maxLifeTime: maxWorkersLifeTime,
       create() {
         return new Worker(`${__dirname}/worker.js`, {
           workerData: {
@@ -113,45 +125,69 @@ export class Runner {
             reject(err)
           })
         )
-      }
-
+      },
     })
   }
 
   private async runInWorker(source: string, args: any[] = [], timeout?: number) {
-    const _timeout = timeout || this.config.timeout || 1000
+    const _timeout = timeout || this.config.timeout || secs(10)
     const worker = await this.pool.acquire() as Worker
     const { promise, resolve, reject } = pDefer()
-    if (this.pool.contains(worker)) {
-      worker.postMessage({ type: 'EXECUTE', source, args })
-      worker.on('message', handleWorkerMessage(this.pool, worker, this.config.interface, resolve, reject))
-      worker.on('error', handleWorkerError(this.pool, worker, reject))
-      worker.on('exit', handleWorkerExit(this.pool, worker, reject))
-      pTimeout(promise, _timeout).catch(handleWorkerError(this.pool, worker, reject))
-    }
-    return promise
+
+    worker.postMessage({
+      type: MessageType.EXECUTE,
+      source,
+      args,
+    })
+
+    const _handleWorkerMessage = handleWorkerMessage(
+      this.pool,
+      worker,
+      this.config.interface,
+      resolve,
+      reject,
+    )
+
+    worker.on('message', _handleWorkerMessage)
+    worker.on('error', _handleWorkerMessage)
+    worker.on('exit', (code) => _handleWorkerMessage({
+      type: MessageType.EXIT,
+      code
+    }))
+
+    const timer = setTimeout(() => {
+      const msg = `Timeout after ${_timeout} milliseconds`
+      _handleWorkerMessage({
+        type: MessageType.ERROR,
+        errorType: ErrorType.TIMEOUT,
+        message: msg,
+        stack: msg,
+      })
+    }, _timeout)
+
+    return promise.then((result) => {
+      clearTimeout(timer)
+      return result
+    }).catch((reason) => {
+      clearTimeout(timer)
+      throw reason
+    })
   }
 
   async run(source: string, args?: any[], timeout?: number) {
     let _source = source
-    try {
-      const { knownSources, allowUnknownSources } = this.config
-      if (!allowUnknownSources && knownSources) {
-        _source = knownSources[source]
-        if (!knownSources.hasOwnProperty(source) || typeof _source !== 'string') {
-          throw new Error(`unknown source \n'${source}'`)
-        }
-      }
-      const runResultMapper = this.config.runResultMapper
-      const result = await this.runInWorker(_source, args, timeout)
-      return typeof runResultMapper === 'function' ? runResultMapper(result) : result
-    } catch (err) {
-      throw new Error(`invalid source \n'${source}', ${err.stack}`)
-    }
-  }
 
-  createFunction(source: string, timeout?: number) {
-    return (...args: any[]) => this.run(source, args, timeout)
+    const { knownSources, allowUnknownSources } = this.config
+    if (!allowUnknownSources && knownSources) {
+      _source = knownSources[source]
+      if (!knownSources.hasOwnProperty(source) || typeof _source !== 'string') {
+        throw new Error(`unknown source \n'${source}'`)
+      }
+    }
+
+    const runResultMapper = this.config.runResultMapper
+    const result = await this.runInWorker(_source, args, timeout)
+    return typeof runResultMapper === 'function' ? runResultMapper(result) : result
   }
 
   destroy() {

@@ -1,9 +1,10 @@
 import pDefer from 'p-defer'
 import deepFreeze from 'deep-freeze'
 import path from 'path'
+import minimatch from 'minimatch'
 import { parentPort, workerData, MessagePort } from 'worker_threads'
 import { Script } from 'vm'
-import { createConsole } from './util'
+import { createConsole, MessageType, ErrorType } from './util'
 import { createInterfaceClient } from './interface'
 
 let requestIdSeed = 0
@@ -11,7 +12,11 @@ const pendingRequestsDeferredPromises = new Map()
 const scriptCache = new Map()
 const _console = createConsole()
 const sendMessage = (msg: any) => (parentPort as MessagePort).postMessage(msg)
-const filename = typeof workerData.filename === 'string' ? workerData.filename : ''
+const filename = (
+  typeof workerData.filename === 'string'
+    ? workerData.filename
+    : '<fun2:worker>'
+)
 const dirname = path.dirname(filename)
 
 const createInterfaceClientFunctionCaller = (method: string, basePath: string) => {
@@ -19,7 +24,13 @@ const createInterfaceClientFunctionCaller = (method: string, basePath: string) =
     const id = requestIdSeed++
     const deferredPromise = pDefer()
     pendingRequestsDeferredPromises.set(id, deferredPromise)
-    sendMessage({ type: 'REQUEST', basePath, method, args, id })
+    sendMessage({
+      type: MessageType.REQUEST,
+      basePath,
+      method,
+      args,
+      id,
+    })
     return deferredPromise.promise
   }
 }
@@ -32,32 +43,50 @@ const injectedInterface = deepFreeze(
 )
 
 const handleMainThreadMessage = (message: any) => {
-  // console.log(message)
+  // console.log('WORKER', message)
   switch (message.type) {
-    case 'RESPONSE':
+    case MessageType.RESPONSE:
       const { id, result } = message
       pendingRequestsDeferredPromises.get(id).resolve(result)
       pendingRequestsDeferredPromises.delete(id)
-      break;
-    case 'EXECUTE':
+      break
+    case MessageType.EXECUTE:
       const { source, args = [] } = message
       pendingRequestsDeferredPromises.forEach((_, p) => p.reject())
       pendingRequestsDeferredPromises.clear()
 
       let script = scriptCache.get(source)
       if (!script) {
-        script = _eval(source)
-        scriptCache.set(source, script)
+        try {
+          script = _eval(source)
+          scriptCache.set(source, script)
+        } catch (err) {
+          const { message, stack } = err
+          sendMessage({
+            type: MessageType.ERROR,
+            errorType: ErrorType.EVAL,
+            message,
+            stack,
+          })
+          break
+        }
       }
 
       runScript(script, args).then(res => {
-        sendMessage({ type: 'RETURN', result: res })
+        sendMessage({
+          type: MessageType.RETURN,
+          result: res,
+        })
       }).catch(err => {
-        console.log(err, err.stack)
         const { message, stack } = err
-        sendMessage({ type: 'ERROR', message, stack })
+        sendMessage({
+          type: MessageType.ERROR,
+          errorType: ErrorType.RUNTIME,
+          message,
+          stack,
+        })
       })
-      break;
+      break
   }
 }
 
@@ -88,7 +117,13 @@ const _require = (modulePath: string) => {
   const isRelative = ~modulePath.indexOf(path.sep)
   let realPath = modulePath
 
-  if (!~allowedModules.indexOf(modulePath)) throw new Error(`'${modulePath}' module not allowed`)
+  // if (!~allowedModules.indexOf(modulePath)) {
+  //   throw new Error(`'${modulePath}' module not allowed`)
+  // }
+
+  if (!allowedModules.some((pattern: string) => minimatch(modulePath, pattern))) {
+    throw new Error(`'${modulePath}' module not allowed`)
+  }
 
   if (isRelative) {
     if (filename === '') throw new Error(`empty module filename`)

@@ -5,6 +5,39 @@ export const isFunction = (fn: any) => typeof fn === 'function'
 export const identity = (a: any) => a
 export const noop = () => { }
 export const secs = (s: number) => s * 1000
+export const mins = (m: number) => secs(m) * 60
+
+export enum MessageType {
+  REQUEST = 0,
+  RESPONSE = 1,
+  EXECUTE = 2,
+  RETURN = 3,
+  ERROR = 4,
+  EXIT = 5,
+}
+
+export enum ErrorType {
+  EVAL = 0,
+  RUNTIME = 1,
+  TIMEOUT = 2,
+  EXIT = 3,
+}
+
+export class EvalError extends Error {
+  errorType: ErrorType = ErrorType.EVAL
+}
+
+export class RuntimeError extends Error {
+  errorType: ErrorType = ErrorType.RUNTIME
+}
+
+export class TimeoutError extends Error {
+  errorType: ErrorType = ErrorType.TIMEOUT
+}
+
+export class ExitError extends Error {
+  errorType: ErrorType = ErrorType.EXIT
+}
 
 export const deepMap = (obj: any, callback: Function, basePath: string[] = []) => {
   const result: any = {}
@@ -37,16 +70,4 @@ export const createConsole = () => {
     }
   }
   return deepFreeze(_console)
-}
-
-export const formatWorkerErrorMessage = (err: Error, source: string) => {
-  const match = /at eval.+?(\d+)\:(\d+)\)\n/g.exec(String(err.stack))
-  let lineno = match ? Number(match[1]) : 0
-  let colno = match ? Number(match[2]) : 0
-  const message = err.message
-  const marker = new Array(colno - 2).fill('-')
-  marker.push('^')
-  const lines = source.split('\n')
-  lines.splice(lineno + 1, 0, marker.join(''))
-  return [`Error (in worker): ${message}:`, '', ...lines, ''].join('\n')
 }

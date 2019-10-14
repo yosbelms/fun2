@@ -1,9 +1,10 @@
-
 const maxUrlLength = 2000
 
 export interface ClientConfig {
   request: Function
   url: string
+  encode: Function
+  decode: Function
 }
 
 export interface ClientRequest {
@@ -27,7 +28,19 @@ const defaultRequest = (req: ClientRequest) => {
     method,
     headers,
     body,
-  })
+  }).then(resp => resp.text())
+}
+
+const defaultEncode = (data: any) => {
+  return encodeURIComponent(JSON.stringify(data))
+}
+
+const defaultDecode = (str: string) => {
+  try {
+    return typeof str === 'string' ? JSON.parse(str) : str
+  } catch (err) {
+    //
+  }
 }
 
 export class Client {
@@ -40,20 +53,21 @@ export class Client {
     this.config = {
       url,
       request: defaultRequest,
+      encode: defaultEncode,
+      decode: defaultDecode,
       ...config,
     }
-
   }
 
   request(method: string, source: string, args: any[]) {
-    let url = this.config.url
+    let { url, encode, decode } = this.config
     let body
     let headers
 
     const sourceUrlFragment = `source=${encodeURIComponent(source)}`
     const argsUrlFragment = (
       Array.isArray(args) && args.length
-        ? `args=${encodeURIComponent(JSON.stringify(args))}`
+        ? `args=${encode(args)}`
         : ``)
 
     switch (method.toUpperCase()) {
@@ -78,7 +92,10 @@ export class Client {
       args,
     }
 
-    return this.config.request(request)
+    return (this.config
+      .request(request)
+      .then((result: any) => decode(result))
+    )
   }
 
   call(fn: RemoteFunction, ...args: any[]) {
@@ -130,29 +147,3 @@ export const post = (statics: TemplateStringsArray, dynamics: string[] = []) => 
   const source = stringifyTemplateLiteral(statics, dynamics)
   return createRemoteFunc(source, 'POST')
 }
-
-// export const func = (statics: TemplateStringsArray, dynamics: string[] = []) => {
-//   const source = stringifyTemplateLiteral(statics, dynamics)
-//   return (...args: any[]) => ({
-//     source,
-//     args,
-//   })
-// }
-
-// export const get = (statics: TemplateStringsArray, dynamics: string[] = []) => {
-//   const source = stringifyTemplateLiteral(statics, dynamics)
-//   const requester = (...args: any[]) => {
-//     return getClient().request('GET', source, args)
-//   }
-//   requester.source = source
-//   return requester
-// }
-
-// export const post = (statics: TemplateStringsArray, dynamics: string[] = []) => {
-//   const source = stringifyTemplateLiteral(statics, dynamics)
-//   const requester = (...args: any[]) => {
-//     return getClient().request('POST', source, args)
-//   }
-//   requester.source = source
-//   return requester
-// }
