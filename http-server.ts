@@ -33,7 +33,7 @@ export const handleHttpRequest = async (
       args = query.args
       break
     case 'POST':
-      args = body.args
+      args = body
       break
   }
 

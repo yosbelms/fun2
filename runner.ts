@@ -2,9 +2,9 @@ import Pool from './pool'
 import pDefer from 'p-defer'
 import { Worker } from 'worker_threads'
 import { MessageType, ErrorType, secs, EvalError, ExitError, RuntimeError, TimeoutError, mins } from './util'
-import { createInterface, serializeInterface, callInInterface } from './interface'
+import { serializeInterface, callInInterface } from './interface'
 
-const handleWorkerMessage = (
+const handleMessageFromWorker = (
   pool: Pool<Worker>,
   worker: Worker,
   iface: any,
@@ -84,7 +84,7 @@ export class Runner {
       maxWorkers: 5,
       maxWorkersIddleTime: mins(1),
       maxWorkersLifeTime: mins(5),
-      interface: createInterface({}),
+      interface: Object.create(null),
       ...config,
     }
 
@@ -140,7 +140,7 @@ export class Runner {
       args,
     })
 
-    const _handleWorkerMessage = handleWorkerMessage(
+    const _handleMessageFromWorker = handleMessageFromWorker(
       this.pool,
       worker,
       this.config.interface,
@@ -148,16 +148,16 @@ export class Runner {
       reject,
     )
 
-    worker.on('message', _handleWorkerMessage)
-    worker.on('error', _handleWorkerMessage)
-    worker.on('exit', (code) => _handleWorkerMessage({
+    worker.on('message', _handleMessageFromWorker)
+    worker.on('error', _handleMessageFromWorker)
+    worker.on('exit', (code) => _handleMessageFromWorker({
       type: MessageType.EXIT,
       code
     }))
 
     const timer = setTimeout(() => {
       const msg = `Timeout after ${_timeout} milliseconds`
-      _handleWorkerMessage({
+      _handleMessageFromWorker({
         type: MessageType.ERROR,
         errorType: ErrorType.TIMEOUT,
         message: msg,
@@ -195,6 +195,6 @@ export class Runner {
   }
 }
 
-export const createRunner = (config: Partial<RunnerConfig> = {}) => {
+export const createRunner = (config: Partial<RunnerConfig> = {}): Runner => {
   return new Runner(config)
 }

@@ -24,11 +24,7 @@ interface RemoteFunction extends Function {
 
 const defaultRequest = (req: ClientRequest) => {
   let { url, method, headers, body } = req
-  return fetch(url, {
-    method,
-    headers,
-    body,
-  }).then(resp => resp.text())
+  return fetch(url, { method, headers, body, }).then(resp => resp.text())
 }
 
 const defaultEncode = (data: any) => {
@@ -65,19 +61,18 @@ export class Client {
     let headers
 
     const sourceUrlFragment = `source=${encodeURIComponent(source)}`
-    const argsUrlFragment = (
-      Array.isArray(args) && args.length
-        ? `args=${encode(args)}`
-        : ``)
 
     switch (method.toUpperCase()) {
       case 'GET':
+        const argsUrlFragment = (
+          Array.isArray(args) && args.length
+            ? `args=${encode(args)}`
+            : ``)
         url = `${url}?${sourceUrlFragment}${argsUrlFragment.length ? `&${argsUrlFragment}` : ``}`
         break
       case 'POST':
         url = `${url}?${sourceUrlFragment}`
-        headers = { 'Content-Type': 'application/x-www-form-urlencoded' }
-        body = argsUrlFragment
+        body = encode(args)
         break
     }
 

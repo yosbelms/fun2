@@ -19,7 +19,7 @@ const filename = (
 )
 const dirname = path.dirname(filename)
 
-const createInterfaceClientFunctionCaller = (method: string, basePath: string) => {
+const createInterfaceClientFunction = (method: string, basePath: string) => {
   return (...args: any[]) => {
     const id = requestIdSeed++
     const deferredPromise = pDefer()
@@ -38,7 +38,7 @@ const createInterfaceClientFunctionCaller = (method: string, basePath: string) =
 const injectedInterface = deepFreeze(
   createInterfaceClient(
     workerData.serializedInterface,
-    createInterfaceClientFunctionCaller,
+    createInterfaceClientFunction,
   )
 )
 
