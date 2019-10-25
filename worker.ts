@@ -117,10 +117,6 @@ const _require = (modulePath: string) => {
   const isRelative = ~modulePath.indexOf(path.sep)
   let realPath = modulePath
 
-  // if (!~allowedModules.indexOf(modulePath)) {
-  //   throw new Error(`'${modulePath}' module not allowed`)
-  // }
-
   if (!allowedModules.some((pattern: string) => minimatch(modulePath, pattern))) {
     throw new Error(`'${modulePath}' module not allowed`)
   }

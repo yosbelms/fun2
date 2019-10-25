@@ -109,19 +109,8 @@ export const setClient = (client: Client) => {
   defaultClient = client
 }
 
-const stringifyTemplateLiteral = (statics: TemplateStringsArray, dynamics: any[] = []) => {
-  return statics.reduce((acc, seg, idx) => {
-    let result = acc + seg
-
-    if (idx < dynamics.length) {
-      const dynamic = dynamics[idx]
-      if (typeof dynamic === 'string') {
-        result += String(dynamic)
-      }
-    }
-
-    return result
-  }, '')
+const stringifyTemplateLiteral = (statics: TemplateStringsArray) => {
+  return statics.join('')
 }
 
 export const createRemoteFunc = (source: string, method: string): RemoteFunction => {
@@ -133,12 +122,12 @@ export const createRemoteFunc = (source: string, method: string): RemoteFunction
   return remoteFunction
 }
 
-export const get = (statics: TemplateStringsArray, dynamics: string[] = []) => {
-  const source = stringifyTemplateLiteral(statics, dynamics)
+export const get = (statics: TemplateStringsArray) => {
+  const source = stringifyTemplateLiteral(statics)
   return createRemoteFunc(source, 'GET')
 }
 
-export const post = (statics: TemplateStringsArray, dynamics: string[] = []) => {
-  const source = stringifyTemplateLiteral(statics, dynamics)
+export const post = (statics: TemplateStringsArray) => {
+  const source = stringifyTemplateLiteral(statics)
   return createRemoteFunc(source, 'POST')
 }

@@ -23,18 +23,18 @@ class ResourceWrapper<T> {
   }
 }
 
-export default class Pool<T> {
-  config: PoolConfig
-  available: ResourceWrapper<T>[]
-  acquired: ResourceWrapper<T>[]
+export class Pool<T> {
+  private config: PoolConfig
+  private available: ResourceWrapper<T>[]
+  private acquired: ResourceWrapper<T>[]
   // java days
-  deferredPromisesWaitingForAvailableResource: pDefer.DeferredPromise<T>[]
-  isDestroyed: boolean
-  isLending: boolean
+  private deferredPromisesWaitingForAvailableResource: pDefer.DeferredPromise<T>[]
+  private isDestroyed: boolean
+  private isLending: boolean
 
-  gcIntervalId: NodeJS.Timeout
+  private gcIntervalId: NodeJS.Timeout
 
-  constructor(config: Partial<PoolConfig>) {
+  constructor(config: Partial<PoolConfig> = {}) {
     const defaults = {
       gcIntervalTime: secs(10),
       maxResorces: 5,
@@ -85,11 +85,11 @@ export default class Pool<T> {
   }
 
   isAvailable(resource: T) {
-    return ~this.findWrapperIdxByResource(this.available, resource)
+    return !!~this.findWrapperIdxByResource(this.available, resource)
   }
 
   isAcquired(resource: T) {
-    return ~this.findWrapperIdxByResource(this.acquired, resource)
+    return !!~this.findWrapperIdxByResource(this.acquired, resource)
   }
 
   contains(resource: T) {
@@ -108,7 +108,7 @@ export default class Pool<T> {
     return this.available.length > 0
   }
 
-  async lendResources() {
+  private async lendResources() {
     // mutex on
     if (this.isLending) return
     this.isLending = true
@@ -198,154 +198,3 @@ export default class Pool<T> {
   }
 
 }
-
-
-
-// import pDefer from 'p-defer'
-// import { noop } from './util'
-
-// export interface PoolConfig {
-//   max: Number
-//   create: Function
-//   destroy: Function
-//   beforeAcquire: Function
-//   beforeAvailable: Function
-// }
-
-// class ResourceWrapper<T, M> {
-//   metadata: M = Object.create(null)
-//   resource: T
-//   constructor(resource: T) {
-//     this.resource = resource
-//   }
-// }
-
-// export default class Pool<T> {
-//   config: PoolConfig
-//   availableResources: T[]
-//   acquiredResources: T[]
-//   // java days
-//   deferredPromisesWaitingForAvailableResource: pDefer.DeferredPromise<T>[]
-//   isDestroyed: boolean
-//   isLending: boolean
-
-//   constructor(config: Partial<PoolConfig>) {
-//     const defaults = {
-//       max: 5,
-//       create: noop,
-//       destory: noop,
-//       beforeAcquire: noop,
-//       beforeAvailable: noop,
-//     }
-//     this.config = { ...defaults, ...config } as PoolConfig
-//     this.availableResources = []
-//     this.acquiredResources = []
-//     // java days
-//     this.deferredPromisesWaitingForAvailableResource = []
-//     this.isDestroyed = false
-//     this.isLending = false
-//   }
-
-//   isAvailable(resource: T) {
-//     return ~this.availableResources.indexOf(resource)
-//   }
-
-//   isAcquired(resource: T) {
-//     return ~this.acquiredResources.indexOf(resource)
-//   }
-
-//   contains(resource: T) {
-//     return this.isAvailable(resource) || this.isAcquired(resource)
-//   }
-
-//   length() {
-//     return this.availableResources.length + this.acquiredResources.length
-//   }
-
-//   isFull() {
-//     return this.length() >= this.config.max
-//   }
-
-//   hasAvailableResources() {
-//     return this.availableResources.length > 0
-//   }
-
-//   async lendResources() {
-//     // mutex on
-//     if (this.isLending) return
-//     this.isLending = true
-
-//     const { create, beforeAcquire, beforeAvailable } = this.config
-//     while (this.deferredPromisesWaitingForAvailableResource.length) {
-//       if (this.isDestroyed) return
-
-//       // just collaborate
-//       await Promise.resolve()
-
-//       if (!this.isFull() && !this.hasAvailableResources()) {
-//         const resource = await Promise.resolve(create())
-//         const canBeAvailable = await beforeAvailable(resource)
-//         if (canBeAvailable !== false) this.availableResources.push(resource)
-//       }
-
-//       if (this.hasAvailableResources() && this.deferredPromisesWaitingForAvailableResource.length) {
-//         const resource = this.availableResources[0]
-//         const canBeAcquired = await beforeAcquire(resource)
-//         if (canBeAcquired !== false) {
-//           this.availableResources.shift()
-//           this.acquiredResources.push(resource)
-//           const deferredPromise = this.deferredPromisesWaitingForAvailableResource.shift()
-//           if (deferredPromise) deferredPromise.resolve(resource)
-//         }
-//       } else {
-//         break
-//       }
-//     }
-
-//     // mutex off
-//     this.isLending = false
-//   }
-
-//   async acquire() {
-//     if (this.isDestroyed) return
-//     const deferredPromise: pDefer.DeferredPromise<T> = pDefer()
-//     this.deferredPromisesWaitingForAvailableResource.push(deferredPromise)
-//     await this.lendResources()
-//     return deferredPromise.promise
-//   }
-
-//   async release(resource: T) {
-//     if (this.isDestroyed) return
-//     const { beforeAvailable } = this.config
-//     if (this.isAcquired(resource)) {
-//       const canBeAvailable = await beforeAvailable(resource)
-//       if (canBeAvailable !== false) {
-//         this.acquiredResources.splice(this.acquiredResources.indexOf(resource), 1)
-//         this.availableResources.push(resource)
-//       }
-//     }
-//     this.lendResources()
-//   }
-
-//   async remove(resource: T) {
-//     const { destroy } = this.config
-//     if (this.isAvailable(resource)) {
-//       this.availableResources.splice(this.availableResources.indexOf(resource), 1)
-//     } else if (this.isAcquired(resource)) {
-//       this.acquiredResources.splice(this.acquiredResources.indexOf(resource), 1)
-//     }
-//     await destroy(resource)
-//     this.lendResources()
-//   }
-
-//   async destroy() {
-//     this.isDestroyed = true
-//     const resources = [...this.availableResources, ...this.acquiredResources]
-//     this.availableResources.splice(0, this.availableResources.length)
-//     this.acquiredResources.splice(0, this.acquiredResources.length)
-//     this.deferredPromisesWaitingForAvailableResource.forEach(p => p.resolve())
-//     const promises = resources.map(r => this.remove(r))
-//     return Promise.all(promises)
-//   }
-
-// }

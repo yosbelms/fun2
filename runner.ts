@@ -1,8 +1,10 @@
-import Pool from './pool'
 import pDefer from 'p-defer'
+import { Pool } from './pool'
 import { Worker } from 'worker_threads'
 import { MessageType, ErrorType, secs, EvalError, ExitError, RuntimeError, TimeoutError, mins } from './util'
 import { serializeInterface, callInInterface } from './interface'
+
+const DEFAULT_TIMEOUT = secs(10)
 
 const handleMessageFromWorker = (
   pool: Pool<Worker>,
@@ -64,23 +66,17 @@ export interface RunnerConfig {
   timeout: number
   filename: string
   allowedModules: string[]
-  knownSources: { [key: string]: string }
-  allowUnknownSources: boolean
   runResultMapper: Function
 }
 
 export class Runner {
-  config: Partial<RunnerConfig>
-  pool: Pool<Worker>
-  cachedScriptsWithEvalError: Map<string, any>
+  private config: Partial<RunnerConfig>
+  private pool: Pool<Worker>
 
   constructor(config: Partial<RunnerConfig>) {
-    this.cachedScriptsWithEvalError = new Map()
     this.config = {
-      timeout: secs(15),
+      timeout: DEFAULT_TIMEOUT,
       allowedModules: [],
-      knownSources: {},
-      allowUnknownSources: true,
       maxWorkers: 5,
       maxWorkersIddleTime: mins(1),
       maxWorkersLifeTime: mins(5),
@@ -101,6 +97,7 @@ export class Runner {
       maxResorces: maxWorkers,
       maxIddleTime: maxWorkersIddleTime,
       maxLifeTime: maxWorkersLifeTime,
+
       create() {
         return new Worker(`${__dirname}/worker.js`, {
           workerData: {
@@ -130,7 +127,7 @@ export class Runner {
   }
 
   private async runInWorker(source: string, args: any[] = [], timeout?: number) {
-    const _timeout = timeout || this.config.timeout || secs(10)
+    const _timeout = timeout || this.config.timeout
     const worker = await this.pool.acquire() as Worker
     const { promise, resolve, reject } = pDefer()
 
@@ -175,18 +172,8 @@ export class Runner {
   }
 
   async run(source: string, args?: any[], timeout?: number) {
-    let _source = source
-
-    const { knownSources, allowUnknownSources } = this.config
-    if (!allowUnknownSources && knownSources) {
-      _source = knownSources[source]
-      if (!knownSources.hasOwnProperty(source) || typeof _source !== 'string') {
-        throw new Error(`unknown source \n'${source}'`)
-      }
-    }
-
     const runResultMapper = this.config.runResultMapper
-    const result = await this.runInWorker(_source, args, timeout)
+    const result = await this.runInWorker(source, args, timeout)
     return typeof runResultMapper === 'function' ? runResultMapper(result) : result
   }
 

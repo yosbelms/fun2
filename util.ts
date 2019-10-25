@@ -23,6 +23,10 @@ export enum ErrorType {
   EXIT = 3,
 }
 
+export interface BaseError extends Error {
+  errorType: ErrorType
+}
+
 export class EvalError extends Error {
   errorType: ErrorType = ErrorType.EVAL
 }

@@ -1,8 +1,19 @@
 import { Runner, createRunner } from './runner'
+import { BaseError, ErrorType } from './util'
 
 interface SourceArgsContainer {
   source?: string
   args?: string
+}
+
+const getHttpStatusFromError = (err: BaseError) => {
+  switch (err.errorType) {
+    case ErrorType.TIMEOUT: return 408
+    case ErrorType.EVAL: return 400
+    case ErrorType.RUNTIME: return 500
+    case ErrorType.EXIT: return 503
+    default: return 500
+  }
 }
 
 const defaultDecode = (data: any) => {
@@ -64,7 +75,7 @@ export const createExpressMiddleware = (
       response.send(result)
       next()
     } catch (err) {
-      response.statusCode = 500
+      response.statusCode = getHttpStatusFromError(err)
       response.send(err.stack)
       next()
     }
@@ -90,11 +101,7 @@ export const createKoaMiddleware = (
       response.body = result
       next()
     } catch (err) {
-      console.log('error http', err.stack)
-      ctx.throw(500, err.stack)
-      // response.status = 500
-      // response.body = err.stack
-      // next()
+      ctx.throw(getHttpStatusFromError(err), err.stack)
     }
   }
 }

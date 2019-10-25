@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "pnpx jasmine-ts",
-    "coverage": "pnpx nyc -e .ts jasmine-ts",
+    "coverage": "pnpm run build && pnpx nyc -e .ts jasmine-ts",
     "clean": "rm -f *.js *.js.map spec/*.js spec/*.js.map",
     "build": "tsc -p ./tsconfig.browser.json && tsc -p ./tsconfig.nodejs.json",
     "watch": "pnpm run clean && pnpx sane 'pnpm run build' --glob='*.ts'"
