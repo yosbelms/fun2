@@ -122,12 +122,12 @@ export const createRemoteFunc = (source: string, method: string): RemoteFunction
   return remoteFunction
 }
 
-export const get = (statics: TemplateStringsArray) => {
-  const source = stringifyTemplateLiteral(statics)
+export const get = (statics: TemplateStringsArray | Function) => {
+  const source = typeof statics === 'function' ? statics.toString() : stringifyTemplateLiteral(statics)
   return createRemoteFunc(source, 'GET')
 }
 
-export const post = (statics: TemplateStringsArray) => {
-  const source = stringifyTemplateLiteral(statics)
+export const post = (statics: TemplateStringsArray | Function) => {
+  const source = typeof statics === 'function' ? statics.toString() : stringifyTemplateLiteral(statics)
   return createRemoteFunc(source, 'POST')
 }

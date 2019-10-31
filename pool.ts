@@ -2,6 +2,7 @@ import pDefer from 'p-defer'
 import { noop, secs } from './util'
 
 export interface PoolConfig {
+  gc: boolean
   gcIntervalTime: number
   maxResorces: number
   maxIddleTime: number
@@ -32,16 +33,17 @@ export class Pool<T> {
   private isDestroyed: boolean
   private isLending: boolean
 
-  private gcIntervalId: NodeJS.Timeout
+  private gcIntervalId?: NodeJS.Timeout
 
   constructor(config: Partial<PoolConfig> = {}) {
     const defaults = {
+      gc: true,
       gcIntervalTime: secs(10),
       maxResorces: 5,
       maxIddleTime: secs(10),
       maxLifeTime: secs(30),
       create: noop,
-      destory: noop,
+      destroy: noop,
       beforeAcquire: noop,
       beforeAvailable: noop,
     }
@@ -53,7 +55,9 @@ export class Pool<T> {
     this.isDestroyed = false
     this.isLending = false
 
-    this.gcIntervalId = setInterval(this.runGc, this.config.gcIntervalTime)
+    if (this.config.gc) {
+      this.gcIntervalId = setInterval(this.runGc, this.config.gcIntervalTime)
+    }
   }
 
   private runGc = () => {
@@ -67,10 +71,12 @@ export class Pool<T> {
       const availableAt = rw.availableAt as number
       const createdAt = rw.createdAt as number
 
+      // iddle
       if ((now - availableAt >= this.config.maxIddleTime)) {
         garbage.push(rw.resource)
       }
 
+      // stale
       if (now - createdAt >= this.config.maxLifeTime) {
         garbage.push(rw.resource)
       }
@@ -188,7 +194,7 @@ export class Pool<T> {
 
   async destroy() {
     this.isDestroyed = true
-    clearInterval(this.gcIntervalId)
+    clearInterval(this.gcIntervalId as NodeJS.Timeout)
     const resources = [...this.available, ...this.acquired]
     this.available.splice(0, this.available.length)
     this.acquired.splice(0, this.acquired.length)

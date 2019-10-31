@@ -4,8 +4,6 @@ import { Worker } from 'worker_threads'
 import { MessageType, ErrorType, secs, EvalError, ExitError, RuntimeError, TimeoutError, mins } from './util'
 import { serializeInterface, callInInterface } from './interface'
 
-const DEFAULT_TIMEOUT = secs(10)
-
 const handleMessageFromWorker = (
   pool: Pool<Worker>,
   worker: Worker,
@@ -75,7 +73,7 @@ export class Runner {
 
   constructor(config: Partial<RunnerConfig>) {
     this.config = {
-      timeout: DEFAULT_TIMEOUT,
+      timeout: secs(10),
       allowedModules: [],
       maxWorkers: 5,
       maxWorkersIddleTime: mins(1),

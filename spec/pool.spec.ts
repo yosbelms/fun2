@@ -1,6 +1,6 @@
 import 'jasmine'
 import { Pool } from '../pool'
-import { EvalError, RuntimeError, TimeoutError, secs } from '../util'
+import delay from 'delay'
 
 describe('pool', () => {
   it('isAcquired', async () => {
@@ -56,6 +56,23 @@ describe('pool', () => {
     const r = await pool.acquire()
     await pool.remove(r)
     expect(destroyed).toBe(true)
+    expect(pool.length()).toBe(0)
+  })
+
+  it('gc remove iddle', async () => {
+    const pool = new Pool({ create: () => null, maxIddleTime: 1, gc: true, gcIntervalTime: 1 })
+    const r = await pool.acquire()
+    await pool.release(r)
+    await delay(10)
+    expect(pool.length()).toBe(0)
+  })
+
+
+  it('gc remove stale', async () => {
+    const pool = new Pool({ create: () => null, maxIddleTime: 20000, gc: true, gcIntervalTime: 1, maxLifeTime: 1 })
+    const r = await pool.acquire()
+    await pool.release(r)
+    await delay(10)
     expect(pool.length()).toBe(0)
   })
 
