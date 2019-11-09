@@ -10,15 +10,15 @@ import { createInterfaceClient } from './interface'
 const defaultFileName = '<fun2:worker>'
 
 export class Worker {
-  parentPort: MessagePort | null
-  requestIdSeed: number
-  pendingRequestsDeferredPromises: Map<number, any>
-  scriptCache: Map<string, any>
-  console: Partial<Console>
-  filename: string
-  dirname: string
-  workerData: any
-  injectedInterface: any
+  private parentPort: MessagePort | null
+  private requestIdSeed: number
+  private pendingRequestsDeferredPromises: Map<number, any>
+  private scriptCache: Map<string, any>
+  private console: Partial<Console>
+  private filename: string
+  private dirname: string
+  private workerData: any
+  private injectedInterface: any
 
   constructor(
     parentPort: MessagePort | null,
@@ -52,11 +52,11 @@ export class Worker {
     }
   }
 
-  sendMessage = (msg: any) => {
+  private sendMessage = (msg: any) => {
     return this.parentPort ? this.parentPort.postMessage(msg) : void 0
   }
 
-  createInterfaceClientFunction = (method: string, basePath: string) => {
+  private createInterfaceClientFunction = (method: string, basePath: string) => {
     return (...args: any[]) => {
       const id = this.requestIdSeed++
       const deferredPromise = pDefer()
@@ -72,7 +72,7 @@ export class Worker {
     }
   }
 
-  handleMainThreadMessage = (message: any) => {
+  private handleMainThreadMessage = (message: any) => {
     // console.log('WORKER', message)
     switch (message.type) {
       case MessageType.RESPONSE:
@@ -120,7 +120,7 @@ export class Worker {
     }
   }
 
-  async runScript(script: any, args: any[]) {
+  private async runScript(script: any, args: any[]) {
     const ctx = {
       console: this.console,
       ...this.injectedInterface,
@@ -136,13 +136,13 @@ export class Worker {
     return mainfn.apply(null, args)
   }
 
-  compile(source: string) {
+  private compile(source: string) {
     return new Script(`'use strict'; exports.__mainfn = ${source}`, {
       filename: this.filename,
     })
   }
 
-  require = (modulePath: string) => {
+  private require = (modulePath: string) => {
     const { allowedModules } = this.workerData
     const isRelative = ~modulePath.indexOf(path.sep)
     let realPath = modulePath
