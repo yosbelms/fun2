@@ -100,7 +100,6 @@ export class Client {
     fn.client = client
     return result
   }
-
 }
 
 let defaultClient: Client = new Client()
@@ -109,8 +108,8 @@ export const setClient = (client: Client) => {
   defaultClient = client
 }
 
-const stringifyTemplateLiteral = (statics: TemplateStringsArray) => {
-  return statics.join('')
+const stringifySourceInput = (statics: TemplateStringsArray | Function) => {
+  return typeof statics === 'function' ? statics.toString() : statics.join('')
 }
 
 export const createRemoteFunc = (source: string, method: string): RemoteFunction => {
@@ -123,11 +122,11 @@ export const createRemoteFunc = (source: string, method: string): RemoteFunction
 }
 
 export const get = (statics: TemplateStringsArray | Function) => {
-  const source = typeof statics === 'function' ? statics.toString() : stringifyTemplateLiteral(statics)
+  const source = stringifySourceInput(statics)
   return createRemoteFunc(source, 'GET')
 }
 
 export const post = (statics: TemplateStringsArray | Function) => {
-  const source = typeof statics === 'function' ? statics.toString() : stringifyTemplateLiteral(statics)
+  const source = stringifySourceInput(statics)
   return createRemoteFunc(source, 'POST')
 }

@@ -126,6 +126,7 @@ export class Pool<T> {
       // just collaborate
       await Promise.resolve()
 
+      // create a new resource
       if (!this.isFull() && !this.hasAvailableResources()) {
         const resource = await Promise.resolve(create())
         const resourceWrapper = new ResourceWrapper(resource)
@@ -136,6 +137,7 @@ export class Pool<T> {
         }
       }
 
+      // lend available resource
       if (this.hasAvailableResources() && this.deferredPromisesWaitingForAvailableResource.length) {
         const resourceWrapper = this.available[0]
         const canBeAcquired = await beforeAcquire(resourceWrapper.resource)
