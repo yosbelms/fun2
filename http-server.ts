@@ -1,5 +1,5 @@
 import { Runner, createRunner } from './runner'
-import { BaseError, ErrorType } from './util'
+import { BaseError, ErrorType } from './error'
 
 interface SourceArgsContainer {
   source?: string

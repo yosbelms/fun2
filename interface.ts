@@ -18,7 +18,7 @@ export const createInterfaceClient = (iface: any, createClient: Function) => {
   })
 }
 
-export const callInInterface = (iface: Object, basePath: string[], method: string, args = []) => {
+export const callInInterface = (iface: Object, basePath: string[], method: string, args: any[] = []) => {
   const prop = getProp(iface, basePath)
   const fn = prop[method]
   if (typeof fn === 'function') return fn.apply(prop, args)

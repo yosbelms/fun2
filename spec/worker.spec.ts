@@ -1,21 +1,25 @@
 import 'jasmine'
-import { Worker } from '../worker'
+import { createWorker, WorkerConfig } from '../worker'
 import { MessageChannel } from 'worker_threads'
-import { MessageType } from '../util'
+import { MessageType } from '../message'
+
+const createWorkerPort = (config: Partial<WorkerConfig> = {}) => {
+  const { port1, port2 } = new MessageChannel()
+  createWorker({ parentPort: port1, ...config })
+  return port2
+}
 
 describe('worker', () => {
   it('should run javascript function', (done) => {
     const result = 1
-    const { port1, port2 } = new MessageChannel()
+    const port = createWorkerPort()
 
-    new Worker(port1)
-
-    port2.on('message', (msg) => {
-      expect(msg).toEqual({ type: MessageType.RETURN, result: result })
+    port.on('message', (msg) => {
+      expect(msg).toEqual({ type: MessageType.RETURN, result })
       done()
     })
 
-    port2.postMessage({
+    port.postMessage({
       type: MessageType.EXECUTE,
       source: `() => ${result}`
     })

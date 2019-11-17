@@ -1,7 +1,9 @@
 import pDefer from 'p-defer'
 import { Pool } from './pool'
 import { Worker } from 'worker_threads'
-import { MessageType, ErrorType, secs, EvalError, ExitError, RuntimeError, TimeoutError, mins } from './util'
+import { secs, mins } from './util'
+import { ErrorType, EvalError, ExitError, RuntimeError, TimeoutError } from './error'
+import { MessageType, RequestMessage, ReturnMessage, ErrorMessage, ExitMessage,  } from './message'
 import { serializeInterface, callInInterface } from './interface'
 
 const handleMessageFromWorker = (
@@ -14,21 +16,21 @@ const handleMessageFromWorker = (
   // console.log('RUNNER', message)
   switch (message.type) {
     case MessageType.REQUEST:
-      const { basePath, method, args, id } = message
+      const { basePath, method, args, id } = message as RequestMessage
       const r = callInInterface(iface, basePath, method, args)
       Promise.resolve(r).then((result) => {
         worker.postMessage({ type: MessageType.RESPONSE, id, result })
       })
       break
     case MessageType.RETURN:
-      const { result: res } = message
+      const { result: res } = message as ReturnMessage
       resolve(res)
       if (pool.isAcquired(worker)) {
         pool.release(worker)
       }
       break
     case MessageType.ERROR:
-      const { stack, errorType } = message
+      const { stack, errorType } = message as ErrorMessage
       let err: Error = new Error
 
       switch (errorType) {
@@ -148,7 +150,7 @@ export class Runner {
     worker.on('exit', (code) => _handleMessageFromWorker({
       type: MessageType.EXIT,
       code
-    }))
+    } as ExitMessage))
 
     const timer = setTimeout(() => {
       const msg = `Timeout after ${_timeout} milliseconds`
@@ -157,7 +159,7 @@ export class Runner {
         errorType: ErrorType.TIMEOUT,
         message: msg,
         stack: msg,
-      })
+      } as ErrorMessage)
     }, _timeout)
 
     return promise.then((result) => {

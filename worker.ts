@@ -4,10 +4,17 @@ import path from 'path'
 import minimatch from 'minimatch'
 import { parentPort, workerData, MessagePort, isMainThread } from 'worker_threads'
 import { Script } from 'vm'
-import { createConsole, MessageType, ErrorType } from './util'
+import { createConsole } from './util'
+import { MessageType, ResponseMessage, ExecuteMessage, ReturnMessage, ErrorMessage } from './message'
+import { ErrorType } from './error'
 import { createInterfaceClient } from './interface'
 
 const defaultFileName = '<fun2:worker>'
+
+export interface WorkerConfig {
+  parentPort: MessagePort | null,
+  workerData: any
+}
 
 export class Worker {
   private parentPort: MessagePort | null
@@ -20,13 +27,17 @@ export class Worker {
   private workerData: any
   private injectedInterface: any
 
-  constructor(
-    parentPort: MessagePort | null,
-    workerData?: any
-  ) {
-    this.workerData = workerData
+  constructor(config: Partial<WorkerConfig>) {
+    const cfg = {
+      workerData: void 0,
+      parentPort: null,
+      ...config,
+    }
+
+    this.workerData = cfg.workerData
+    this.parentPort = cfg.parentPort
+
     this.requestIdSeed = 0
-    this.parentPort = parentPort
     this.filename = defaultFileName
     this.console = createConsole()
     this.scriptCache = new Map()
@@ -47,8 +58,8 @@ export class Worker {
 
     this.dirname = path.dirname(this.filename)
 
-    if (parentPort) {
-      parentPort.on('message', this.handleMainThreadMessage)
+    if (this.parentPort) {
+      this.parentPort.on('message', this.handleMainThreadMessage)
     }
   }
 
@@ -76,12 +87,12 @@ export class Worker {
     // console.log('WORKER', message)
     switch (message.type) {
       case MessageType.RESPONSE:
-        const { id, result } = message
+        const { id, result } = message as ResponseMessage
         this.pendingRequestsDeferredPromises.get(id).resolve(result)
         this.pendingRequestsDeferredPromises.delete(id)
         break
       case MessageType.EXECUTE:
-        const { source, args = [] } = message
+        const { source, args = [] } = message as ExecuteMessage
         this.pendingRequestsDeferredPromises.forEach(p => p.reject())
         this.pendingRequestsDeferredPromises.clear()
 
@@ -106,7 +117,7 @@ export class Worker {
           this.sendMessage({
             type: MessageType.RETURN,
             result: res,
-          })
+          } as ReturnMessage)
         }).catch(err => {
           const { message, stack } = err
           this.sendMessage({
@@ -114,7 +125,7 @@ export class Worker {
             errorType: ErrorType.RUNTIME,
             message,
             stack,
-          })
+          } as ErrorMessage)
         })
         break
     }
@@ -160,7 +171,11 @@ export class Worker {
   }
 }
 
+export const createWorker = (config: Partial<WorkerConfig> = {}): Worker => {
+  return new Worker(config)
+}
+
 // bootstrap
 if (!isMainThread) {
-  new Worker(parentPort, workerData)
+  createWorker({ parentPort, workerData })
 }

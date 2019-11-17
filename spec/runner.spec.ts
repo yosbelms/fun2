@@ -1,6 +1,7 @@
 import { createRunner, Runner } from '../runner'
 import 'jasmine'
-import { EvalError, RuntimeError, TimeoutError, secs } from '../util'
+import { secs } from '../util'
+import { EvalError, RuntimeError, TimeoutError } from '../error'
 
 describe('runner', () => {
   let runner: Runner

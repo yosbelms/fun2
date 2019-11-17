@@ -7,42 +7,6 @@ export const noop = () => { }
 export const secs = (s: number) => s * 1000
 export const mins = (m: number) => secs(m) * 60
 
-export enum MessageType {
-  REQUEST = 0,
-  RESPONSE = 1,
-  EXECUTE = 2,
-  RETURN = 3,
-  ERROR = 4,
-  EXIT = 5,
-}
-
-export enum ErrorType {
-  EVAL = 0,
-  RUNTIME = 1,
-  TIMEOUT = 2,
-  EXIT = 3,
-}
-
-export interface BaseError extends Error {
-  errorType: ErrorType
-}
-
-export class EvalError extends Error {
-  errorType: ErrorType = ErrorType.EVAL
-}
-
-export class RuntimeError extends Error {
-  errorType: ErrorType = ErrorType.RUNTIME
-}
-
-export class TimeoutError extends Error {
-  errorType: ErrorType = ErrorType.TIMEOUT
-}
-
-export class ExitError extends Error {
-  errorType: ErrorType = ErrorType.EXIT
-}
-
 export const deepMap = (obj: any, callback: Function, basePath: string[] = []) => {
   const result: any = {}
   for (const [key, value] of Object.entries(obj)) {

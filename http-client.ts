@@ -108,8 +108,12 @@ export const setClient = (client: Client) => {
   defaultClient = client
 }
 
-const stringifySourceInput = (statics: TemplateStringsArray | Function) => {
-  return typeof statics === 'function' ? statics.toString() : statics.join('')
+const stringifySourceInput = (statics: TemplateStringsArray | Function | string) : string => {
+  const _type = typeof statics
+  if (_type === 'function') return statics.toString()
+  if (_type === 'string') return statics as string
+  if (Array.isArray(statics)) return statics.join('')
+  return ''
 }
 
 export const createRemoteFunc = (source: string, method: string): RemoteFunction => {
@@ -121,12 +125,12 @@ export const createRemoteFunc = (source: string, method: string): RemoteFunction
   return remoteFunction
 }
 
-export const get = (statics: TemplateStringsArray | Function) => {
+export const get = (statics: TemplateStringsArray | Function | string) => {
   const source = stringifySourceInput(statics)
   return createRemoteFunc(source, 'GET')
 }
 
-export const post = (statics: TemplateStringsArray | Function) => {
+export const post = (statics: TemplateStringsArray | Function | string) => {
   const source = stringifySourceInput(statics)
   return createRemoteFunc(source, 'POST')
 }
