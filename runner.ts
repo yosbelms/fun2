@@ -3,7 +3,7 @@ import { Pool } from './pool'
 import { Worker } from 'worker_threads'
 import { secs, mins } from './util'
 import { ErrorType, EvalError, ExitError, RuntimeError, TimeoutError } from './error'
-import { MessageType, RequestMessage, ReturnMessage, ErrorMessage, ExitMessage,  } from './message'
+import { MessageType, RequestMessage, ReturnMessage, ErrorMessage, ExitMessage, } from './message'
 import { serializeInterface, callInInterface } from './interface'
 
 const handleMessageFromWorker = (
@@ -67,11 +67,13 @@ export interface RunnerConfig {
   filename: string
   allowedModules: string[]
   runResultMapper: Function
+  hashMap: { [k: string]: string }
 }
 
 export class Runner {
   private config: Partial<RunnerConfig>
   private pool: Pool<Worker>
+  private hashMap: Map<string, string>
 
   constructor(config: Partial<RunnerConfig>) {
     this.config = {
@@ -81,6 +83,7 @@ export class Runner {
       maxWorkersIddleTime: mins(1),
       maxWorkersLifeTime: mins(5),
       interface: Object.create(null),
+      hashMap: {},
       ...config,
     }
 
@@ -91,7 +94,10 @@ export class Runner {
       allowedModules,
       maxWorkersIddleTime,
       maxWorkersLifeTime,
+      hashMap
     } = this.config
+
+    this.hashMap = new Map(Object.entries(hashMap || {}))
 
     this.pool = new Pool({
       maxResorces: maxWorkers,
@@ -171,8 +177,17 @@ export class Runner {
     })
   }
 
-  async run(source: string, args?: any[], timeout?: number) {
-    const runResultMapper = this.config.runResultMapper
+  async run(sourceOrHash: string, args?: any[], timeout?: number) {
+    let source = sourceOrHash
+    const { runResultMapper } = this.config
+
+    if (this.hashMap.size > 0) {
+      if (this.hashMap.has(sourceOrHash)) {
+        source = this.hashMap.get(sourceOrHash) || ''
+      } else {
+        throw new EvalError(`unknown source: ${sourceOrHash}`)
+      }
+    }
     const result = await this.runInWorker(source, args, timeout)
     return typeof runResultMapper === 'function' ? runResultMapper(result) : result
   }

@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { hashMap as sharedHashMap } from './util'
 
 const defaultTestRegex = /\.fun2\.(js|mjs|jsx|ts|tsx)$/
 
@@ -7,9 +8,11 @@ const filenamePassTest = (regex: RegExp, filename: string) => {
 }
 
 const sha1 = (txt: string) => {
-  const shasum = crypto.createHash('sha1')
-  shasum.update(txt)
-  return shasum.digest('hex')
+  return (crypto
+    .createHash('sha1')
+    .update(txt)
+    .digest('hex')
+  )
 }
 
 const defaultTypescriptTranspile = (source: string) => {
@@ -22,7 +25,7 @@ const defaultTypescriptTranspile = (source: string) => {
     })
     return transpileOutput.outputText
   } catch (e) {
-    throw new Error(`${__filename}: invalid 'ts' option. ${e.stack}`)
+    throw new Error(`${__filename}: ${e.stack}`)
   }
 }
 
@@ -36,7 +39,7 @@ export default ({ types: t }: { types: any }) => {
           transpile = defaultTypescriptTranspile,
           test = defaultTestRegex,
           hashSource,
-          hashMap,
+          hashMap = sharedHashMap,
         } = state.opts
 
         if (!filenamePassTest(test, filename)) return
@@ -52,11 +55,16 @@ export default ({ types: t }: { types: any }) => {
 
             let sourceOutput = hashSource ? sha1(transpiled) : transpiled
             if (hashMap) {
-              hashMap[sourceOutput] = transpiled
+              hashMap.set(sourceOutput, transpiled)
             }
 
             // transform
             firstArgPath.replaceWith(t.stringLiteral(sourceOutput))
+
+            // calleePath.replaceWith(t.memberExpression(
+            //   t.cloneDeep(calleePath.node),
+            //   t.identifier('_compiled')
+            // ))
           }
         }
       }
