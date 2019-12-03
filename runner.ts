@@ -1,23 +1,45 @@
 import pDefer from 'p-defer'
 import { Pool } from './pool'
-import { Worker } from 'worker_threads'
-import { secs, mins } from './util'
+import { Worker as NodeWorker } from 'worker_threads'
+import { secs, mins, genericMiddleware } from './util'
 import { ErrorType, EvalError, ExitError, RuntimeError, TimeoutError } from './error'
-import { MessageType, RequestMessage, ReturnMessage, ErrorMessage, ExitMessage, } from './message'
-import { serializeInterface, callInInterface } from './interface'
+import { MessageType, RequestMessage, ReturnMessage, ErrorMessage, ExitMessage, ExecuteMessage, } from './message'
+import { serializeApi, callInApi, getApiFromApiModule } from './api'
+
+class WorkerWrapper<T> {
+  private nodeWorker: NodeWorker
+  private context?: T
+
+  constructor(nodeWorker: NodeWorker) {
+    this.nodeWorker = nodeWorker
+  }
+
+  setContext(ctx: T) {
+    this.context = ctx
+  }
+
+  getContext() {
+    return this.context
+  }
+
+  getWorker() {
+    return this.nodeWorker
+  }
+}
 
 const handleMessageFromWorker = (
-  pool: Pool<Worker>,
-  worker: Worker,
-  iface: any,
+  pool: Pool<WorkerWrapper<any>>,
+  workerWrapper: WorkerWrapper<any>,
+  api: any,
   resolve: Function,
   reject: Function,
 ) => (message: any) => {
   // console.log('RUNNER', message)
+  const worker = workerWrapper.getWorker()
   switch (message.type) {
     case MessageType.REQUEST:
       const { basePath, method, args, id } = message as RequestMessage
-      const r = callInInterface(iface, basePath, method, args)
+      const r = callInApi(api, basePath, method, args, workerWrapper.getContext())
       Promise.resolve(r).then((result) => {
         worker.postMessage({ type: MessageType.RESPONSE, id, result })
       })
@@ -25,8 +47,8 @@ const handleMessageFromWorker = (
     case MessageType.RETURN:
       const { result: res } = message as ReturnMessage
       resolve(res)
-      if (pool.isAcquired(worker)) {
-        pool.release(worker)
+      if (pool.isAcquired(workerWrapper)) {
+        pool.release(workerWrapper)
       }
       break
     case MessageType.ERROR:
@@ -46,20 +68,22 @@ const handleMessageFromWorker = (
       }
 
       reject(err)
-      if (pool.isAcquired(worker)) {
-        pool.release(worker)
+      if (pool.isAcquired(workerWrapper)) {
+        pool.release(workerWrapper)
       }
       break
     case MessageType.EXIT:
       const { code } = message
       reject(new ExitError(`Worker has ended with code ${code}`))
-      pool.remove(worker)
+      pool.remove(workerWrapper)
       break
   }
 }
 
 export interface RunnerConfig {
-  interface: any
+  apiModule: any
+  api: any
+  middleware: typeof genericMiddleware
   maxWorkers: number
   maxWorkersIddleTime: number
   maxWorkersLifeTime: number
@@ -72,7 +96,7 @@ export interface RunnerConfig {
 
 export class Runner {
   private config: Partial<RunnerConfig>
-  private pool: Pool<Worker>
+  private pool: Pool<WorkerWrapper<any>>
   private hashMap: Map<string, string>
 
   constructor(config: Partial<RunnerConfig>) {
@@ -82,13 +106,13 @@ export class Runner {
       maxWorkers: 5,
       maxWorkersIddleTime: mins(1),
       maxWorkersLifeTime: mins(5),
-      interface: Object.create(null),
+      api: Object.create(null),
       hashMap: {},
       ...config,
     }
 
     const {
-      interface: iface,
+      api,
       maxWorkers,
       filename,
       allowedModules,
@@ -99,26 +123,28 @@ export class Runner {
 
     this.hashMap = new Map(Object.entries(hashMap || {}))
 
-    this.pool = new Pool({
+    this.pool = new Pool<WorkerWrapper<any>>({
       maxResorces: maxWorkers,
       maxIddleTime: maxWorkersIddleTime,
       maxLifeTime: maxWorkersLifeTime,
 
       create() {
-        return new Worker(`${__dirname}/worker.js`, {
+        const nodeWorker = new NodeWorker(`${__dirname}/worker.js`, {
           workerData: {
-            serializedInterface: serializeInterface(iface),
+            serializedApi: serializeApi(api),
             filename,
             allowedModules,
           }
         })
+        return new WorkerWrapper(nodeWorker)
       },
 
-      beforeAvailable(worker: Worker) {
-        worker.removeAllListeners()
+      beforeAvailable(workerWrapper: WorkerWrapper<any>) {
+        workerWrapper.getWorker().removeAllListeners()
       },
 
-      destroy(worker: Worker) {
+      destroy(workerWrapper: WorkerWrapper<any>) {
+        const worker = workerWrapper.getWorker()
         return new Promise((resolve, reject) =>
           worker.terminate().then(() => {
             resolve()
@@ -132,21 +158,25 @@ export class Runner {
     })
   }
 
-  private async runInWorker(source: string, args: any[] = [], timeout?: number) {
+  private async runInWorker(source: string, args: any[] = [], context?: any, timeout?: number) {
     const _timeout = timeout || this.config.timeout
-    const worker = await this.pool.acquire() as Worker
+    const middleware = this.config.middleware || genericMiddleware
+    const workerWrapper = await this.pool.acquire() as WorkerWrapper<any>
+    const worker = workerWrapper.getWorker()
     const { promise, resolve, reject } = pDefer()
+
+    workerWrapper.setContext(context)
 
     worker.postMessage({
       type: MessageType.EXECUTE,
       source,
       args,
-    })
+    } as ExecuteMessage)
 
     const _handleMessageFromWorker = handleMessageFromWorker(
       this.pool,
-      worker,
-      this.config.interface,
+      workerWrapper,
+      this.config.api,
       resolve,
       reject,
     )
@@ -177,7 +207,7 @@ export class Runner {
     })
   }
 
-  async run(sourceOrHash: string, args?: any[], timeout?: number) {
+  async run(sourceOrHash: string, args?: any[], context?: any, timeout?: number) {
     let source = sourceOrHash
     const { runResultMapper } = this.config
 
@@ -188,7 +218,7 @@ export class Runner {
         throw new EvalError(`unknown source: ${sourceOrHash}`)
       }
     }
-    const result = await this.runInWorker(source, args, timeout)
+    const result = await this.runInWorker(source, args, context, timeout)
     return typeof runResultMapper === 'function' ? runResultMapper(result) : result
   }
 
@@ -198,5 +228,14 @@ export class Runner {
 }
 
 export const createRunner = (config: Partial<RunnerConfig> = {}): Runner => {
+  const { apiModule } = config
+  if (apiModule) {
+    config.api = getApiFromApiModule(apiModule)
+
+    // const entryName = Object.keys(apiModule).find(key => key !== 'default')
+    // if (entryName !== void 0) {
+    //   config.api = { [entryName]: apiModule[entryName] }
+    // }
+  }
   return new Runner(config)
 }

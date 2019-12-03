@@ -1,7 +1,7 @@
 import crypto from 'crypto'
 import { hashMap as sharedHashMap } from './util'
 
-const defaultTestRegex = /\.fun2\.(js|mjs|jsx|ts|tsx)$/
+const defaultTestRegex = /\.(js|mjs|jsx|ts|tsx)$/
 
 const filenamePassTest = (regex: RegExp, filename: string) => {
   return filename && regex.test(filename)
@@ -44,9 +44,9 @@ export default ({ types: t }: { types: any }) => {
 
         if (!filenamePassTest(test, filename)) return
 
-        const fnNames = ['get', 'post']
+        const fnTagName = '$func'
         const calleePath = path.get('callee')
-        if (fnNames.includes(calleePath.node.name)) {
+        if (fnTagName === calleePath.node.name) {
           const firstArgPath = path.get('arguments.0')
 
           if (t.isFunctionExpression(firstArgPath) || t.isArrowFunctionExpression(firstArgPath)) {

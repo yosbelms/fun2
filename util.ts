@@ -7,6 +7,8 @@ export const noop = () => { }
 export const secs = (s: number) => s * 1000
 export const mins = (m: number) => secs(m) * 60
 
+export const genericMiddleware = (context: any, next: Function) => next()
+
 export const deepMap = (obj: any, callback: Function, basePath: string[] = []) => {
   const result: any = {}
   for (const [key, value] of Object.entries(obj)) {

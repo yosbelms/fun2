@@ -5,9 +5,9 @@ import minimatch from 'minimatch'
 import { parentPort, workerData, MessagePort, isMainThread } from 'worker_threads'
 import { Script } from 'vm'
 import { createConsole } from './util'
-import { MessageType, ResponseMessage, ExecuteMessage, ReturnMessage, ErrorMessage } from './message'
+import { MessageType, ResponseMessage, ExecuteMessage, ReturnMessage, ErrorMessage, RequestMessage } from './message'
 import { ErrorType } from './error'
-import { createInterfaceClient } from './interface'
+import { createApiClient } from './api'
 
 const defaultFileName = '<fun2:worker>'
 
@@ -25,7 +25,7 @@ export class Worker {
   private filename: string
   private dirname: string
   private workerData: any
-  private injectedInterface: any
+  private injectedApi: any
 
   constructor(config: Partial<WorkerConfig>) {
     const cfg = {
@@ -42,16 +42,16 @@ export class Worker {
     this.console = createConsole()
     this.scriptCache = new Map()
     this.pendingRequestsDeferredPromises = new Map()
-    this.injectedInterface = {}
+    this.injectedApi = {}
 
     if (workerData) {
       if (typeof workerData.filename === 'string') {
         this.filename = workerData.filename
       }
-      this.injectedInterface = deepFreeze(
-        createInterfaceClient(
-          workerData.serializedInterface,
-          this.createInterfaceClientFunction,
+      this.injectedApi = deepFreeze(
+        createApiClient(
+          workerData.serializedApi,
+          this.createApiClientFunction,
         )
       )
     }
@@ -67,7 +67,7 @@ export class Worker {
     return this.parentPort ? this.parentPort.postMessage(msg) : void 0
   }
 
-  private createInterfaceClientFunction = (method: string, basePath: string) => {
+  private createApiClientFunction = (method: string, basePath: string[]) => {
     return (...args: any[]) => {
       const id = this.requestIdSeed++
       const deferredPromise = pDefer()
@@ -78,7 +78,7 @@ export class Worker {
         method,
         args,
         id,
-      })
+      } as RequestMessage)
       return deferredPromise.promise
     }
   }
@@ -134,7 +134,7 @@ export class Worker {
   private async runScript(script: any, args: any[]) {
     const ctx = {
       console: this.console,
-      ...this.injectedInterface,
+      ...this.injectedApi,
       isWorker: true,
       require: this.require,
       __filename: this.filename,

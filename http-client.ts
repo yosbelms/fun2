@@ -1,42 +1,12 @@
-const maxUrlLength = 2000
-
 export interface ClientConfig {
-  request: Function
   url: string
-  encode: Function
-  decode: Function
-}
-
-export interface ClientRequest {
-  url: string
-  method: string
-  headers: { [key: string]: string }
-  body: any
-  source: string
-  args: any[]
 }
 
 interface RemoteFunction extends Function {
   (...args: any[]): any
+  isRemoteFunction: boolean
   client?: Client
   source?: string
-}
-
-const defaultRequest = (req: ClientRequest) => {
-  let { url, method, headers, body } = req
-  return fetch(url, { method, headers, body, }).then(resp => resp.text())
-}
-
-const defaultEncode = (data: any) => {
-  return encodeURIComponent(JSON.stringify(data))
-}
-
-const defaultDecode = (str: string) => {
-  try {
-    return typeof str === 'string' ? JSON.parse(str) : str
-  } catch (err) {
-    //
-  }
 }
 
 export class Client {
@@ -48,49 +18,24 @@ export class Client {
     }
     this.config = {
       url,
-      request: defaultRequest,
-      encode: defaultEncode,
-      decode: defaultDecode,
       ...config,
     }
   }
 
-  request(method: string, source: string, args: any[]) {
-    let { url, encode, decode } = this.config
-    let body
-    let headers
+  register(functions: any[]) {
+    functions.forEach((fn: RemoteFunction) => {
+      if (typeof fn === 'function' && fn.isRemoteFunction) {
+        fn.client = this
+      }
+    })
+  }
 
-    const sourceUrlFragment = `source=${encodeURIComponent(source)}`
-
-    switch (method.toUpperCase()) {
-      case 'GET':
-        const argsUrlFragment = (
-          Array.isArray(args) && args.length
-            ? `args=${encode(args)}`
-            : ``)
-        url = `${url}?${sourceUrlFragment}${argsUrlFragment.length ? `&${argsUrlFragment}` : ``}`
-        break
-      case 'POST':
-        url = `${url}?${sourceUrlFragment}`
-        body = encode(args)
-        break
-    }
-
-    if (url.length > maxUrlLength) throw new Error(`url exceeds max length of ${maxUrlLength}, '${url}'`)
-
-    const request = {
-      url,
-      method,
-      headers,
-      body,
-      source,
-      args,
-    }
-
-    return (this.config
-      .request(request)
-      .then((result: any) => decode(result))
-    )
+  async request(source: string, args: any[]) {
+    const { url } = this.config
+    const body = JSON.stringify({ source, args })
+    const headers = { 'Content-Type': 'application/json' }
+    const response = await fetch(url, { method: 'POST', headers, body })
+    return response.json()
   }
 
   call(fn: RemoteFunction, ...args: any[]) {
@@ -108,7 +53,7 @@ export const setClient = (client: Client) => {
   defaultClient = client
 }
 
-const stringifySourceInput = (statics: TemplateStringsArray | Function | string) : string => {
+const stringifySourceInput = (statics: TemplateStringsArray | Function | string): string => {
   const _type = typeof statics
   if (_type === 'function') return statics.toString()
   if (_type === 'string') return statics as string
@@ -116,21 +61,18 @@ const stringifySourceInput = (statics: TemplateStringsArray | Function | string)
   return ''
 }
 
-export const createRemoteFunc = (source: string, method: string): RemoteFunction => {
+export const createRemoteFunc = (source: string): RemoteFunction => {
   const remoteFunction: RemoteFunction = (...args: any[]): any => {
-    const client = remoteFunction.client || getClient()
-    return client.request(method, source, args)
+    const client = remoteFunction.client
+    if (client) return client.request(source, args)
+    throw new Error('no bound client')
   }
+  remoteFunction.isRemoteFunction = true
   remoteFunction.source = source
   return remoteFunction
 }
 
-export const get = (statics: TemplateStringsArray | Function | string) => {
+export const $func = (statics: TemplateStringsArray | Function | string) => {
   const source = stringifySourceInput(statics)
-  return createRemoteFunc(source, 'GET')
-}
-
-export const post = (statics: TemplateStringsArray | Function | string) => {
-  const source = stringifySourceInput(statics)
-  return createRemoteFunc(source, 'POST')
+  return createRemoteFunc(source)
 }

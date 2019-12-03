@@ -1,9 +1,14 @@
 import { Runner, createRunner } from './runner'
 import { BaseError, ErrorType } from './error'
 
-interface SourceArgsContainer {
+export interface Context {
+  request: any
+  response: any
+}
+
+export interface Payload {
   source?: string
-  args?: string
+  args?: any[]
 }
 
 const getHttpStatusFromError = (err: BaseError) => {
@@ -16,61 +21,35 @@ const getHttpStatusFromError = (err: BaseError) => {
   }
 }
 
-const defaultDecode = (data: any) => {
-  return (
-    typeof data === 'string'
-      ? JSON.parse(data)
-      : void 0
-  )
-}
-
-const defaultEncode = (data: any) => {
-  return JSON.stringify(data)
-}
-
-export const handleHttpRequest = async (
+const handleHttpRequest = async (
   runner: Runner,
   method: string,
-  query: SourceArgsContainer = {},
-  body: SourceArgsContainer = {},
-  encode: Function = defaultEncode,
-  decode: Function = defaultDecode,
+  body: any,
+  ctx: Context,
 ) => {
-  let source = query.source
-  let args
+  if (method.toUpperCase() !== 'POST') throw new Error('method not allowed')
 
-  switch (method.toUpperCase()) {
-    case 'GET':
-      args = query.args
-      break
-    case 'POST':
-      args = body
-      break
-  }
-
-  const decodedArgs = decode(args)
+  const payload: Payload = typeof body === 'string' ? JSON.parse(body) : body
   const result = await (runner as Runner).run(
-    source || '',
-    decodedArgs
+    payload.source || '',
+    payload.args,
+    ctx,
   )
 
-  return encode(result)
+  return JSON.stringify(result)
 }
 
-export const createExpressMiddleware = (
-  runner: Runner = createRunner(),
-  encode?: Function,
-  decode?: Function,
+const createMiddleware = (
+  runner: Runner = createRunner()
 ) => {
   return async (request: any, response: any, next: Function) => {
     try {
+      const ctx: Context = { request, response }
       const result = await handleHttpRequest(
         runner,
         request.method,
-        request.query,
         request.body,
-        encode,
-        decode,
+        ctx,
       )
       response.send(result)
       next()
@@ -82,26 +61,13 @@ export const createExpressMiddleware = (
   }
 }
 
-export const createKoaMiddleware = (
-  runner: Runner = createRunner(),
-  encode?: Function,
-  decode?: Function,
-) => {
-  return async (ctx: any, next: Function) => {
-    const { request, response } = ctx
-    try {
-      const result = await handleHttpRequest(
-        runner,
-        request.method,
-        request.query,
-        request.body,
-        encode,
-        decode,
-      )
-      response.body = result
-      next()
-    } catch (err) {
-      ctx.throw(getHttpStatusFromError(err), err.stack)
-    }
-  }
+export const setupServer = (config: {
+  url?: string,
+  app: any,
+  express: any,
+  runner: Runner
+}) => {
+  const { url, app, express, runner } = config
+  app.use(url, [express.json(), createMiddleware(runner)])
+  return app
 }

@@ -6,7 +6,7 @@
   "scripts": {
     "test": "pnpx jasmine-ts",
     "coverage": "pnpm run build && pnpx nyc -e .ts jasmine-ts",
-    "clean": "rm -f *.js *.js.map spec/*.js spec/*.js.map",
+    "clean": "rm -f *.js *.js.map spec/*.js spec/*.js.map dev-tools/*.js dev-tools/*.js.map",
     "build": "tsc -p ./tsconfig.browser.json && tsc -p ./tsconfig.nodejs.json",
     "watch": "pnpm run clean && pnpx sane 'pnpm run build' --glob='*.ts'"
   },
@@ -18,9 +18,9 @@
     "@types/minimatch": "^3.0.3",
     "@types/node": "^12.11.1",
     "deep-freeze": "^0.0.1",
-    "make-dir": "^3.0.0",
-    "p-defer": "^3.0.0",
     "globby": "^10.0.1",
+    "make-dir": "^3.0.0",
+    "p-defer": "^3.0.0"
   },
   "devDependencies": {
     "@istanbuljs/nyc-config-typescript": "^0.1.3",
